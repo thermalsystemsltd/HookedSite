@@ -1,5 +1,7 @@
-import React from 'react';
-import { Smartphone, Cloud, Droplets, Fish, Map, BookMarked, Calendar, Upload } from 'lucide-react';
+import React, { useState } from 'react';
+import { Smartphone, Cloud, Droplets, Fish, Map, BookMarked, Calendar, Upload, Lock } from 'lucide-react';
+import { AdminLogin } from './components/AdminLogin';
+import { AdminPanel } from './components/AdminPanel';
 
 function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) {
   return (
@@ -12,6 +14,9 @@ function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementTy
 }
 
 function App() {
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Hero Section */}
@@ -111,10 +116,17 @@ function App() {
               </h3>
               <p className="mt-2">Your smart fly fishing companion</p>
             </div>
-            <div className="flex gap-8">
+            <div className="flex gap-8 items-center">
               <a href="#" className="hover:text-white transition-colors">About</a>
               <a href="#" className="hover:text-white transition-colors">Privacy</a>
               <a href="#" className="hover:text-white transition-colors">Contact</a>
+              <button 
+                onClick={() => setShowAdminLogin(true)}
+                className="text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+              >
+                <Lock className="w-4 h-4" />
+                <span className="sr-only">Admin</span>
+              </button>
             </div>
           </div>
           <div className="mt-8 pt-8 border-t border-gray-800 text-center">
@@ -122,6 +134,20 @@ function App() {
           </div>
         </div>
       </footer>
+
+      {/* Admin Login Modal */}
+      {showAdminLogin && !isLoggedIn && (
+        <AdminLogin
+          onLogin={() => {
+            setIsLoggedIn(true);
+            setShowAdminLogin(false);
+          }}
+          onClose={() => setShowAdminLogin(false)}
+        />
+      )}
+
+      {/* Admin Panel */}
+      {isLoggedIn && <AdminPanel />}
     </div>
   );
 }
