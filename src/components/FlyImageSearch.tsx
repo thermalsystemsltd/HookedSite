@@ -50,7 +50,6 @@ export function FlyImageSearch() {
     setSelectedFly(fly);
     
     try {
-      // Enhance search query with fly fishing context
       const searchQuery = `${fly.name} fly fishing pattern fly tying`;
       const response = await fetch(
         `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=5`
@@ -58,13 +57,25 @@ export function FlyImageSearch() {
       
       const data = await response.json();
       
+      // Check for quota exceeded error
+      if (data.error?.code === 429 || data.error?.message?.includes('quota')) {
+        setMessage('Daily search quota exceeded. Please try again tomorrow.');
+        setSearchResults([]);
+        return;
+      }
+      
       if (data.items) {
         setSearchResults(data.items);
       } else {
         setMessage('No images found');
       }
     } catch (err: any) {
-      setMessage(`Error: ${err.message}`);
+      // Check for specific quota error messages
+      if (err.message?.includes('quota') || err.message?.includes('429')) {
+        setMessage('Daily search quota exceeded. Please try again tomorrow.');
+      } else {
+        setMessage(`Error: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }

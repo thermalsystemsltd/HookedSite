@@ -1,29 +1,19 @@
 import React, { useState } from 'react';
-import { Smartphone, Cloud, Droplets, Fish, Map, BookMarked, Calendar, Upload, Lock } from 'lucide-react';
+import { Smartphone, Fish, Cloud, Droplets, Mountain, Map } from 'lucide-react';
 import { AdminLogin } from './components/AdminLogin';
 import { AdminPanel } from './components/AdminPanel';
-
-function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) {
-  return (
-    <div className="bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow">
-      <Icon className="w-8 h-8 text-blue-600 mb-4" />
-      <h3 className="text-xl font-semibold mb-2">{title}</h3>
-      <p className="text-gray-600">{description}</p>
-    </div>
-  );
-}
 
 function App() {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-green-50 to-blue-50">
       {/* Hero Section */}
       <header className="relative">
         <div className="absolute inset-0 z-0">
           <img 
-            src="https://images.unsplash.com/photo-1516849841032-87cbac4d88f7?auto=format&fit=crop&q=80"
+            src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&q=80"
             alt="Fly fishing background"
             className="w-full h-full object-cover opacity-30"
           />
@@ -31,13 +21,13 @@ function App() {
         <div className="relative z-10 container mx-auto px-4 pt-24 pb-32">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-5xl font-bold text-gray-900 mb-6">
-              Perfect Fly Selection, Every Cast
+              Master Your Fly Selection
             </h1>
             <p className="text-xl text-gray-700 mb-8">
-              Your intelligent companion for choosing the right fly based on real-time conditions, local insights, and personal experience.
+              Match the hatch with precision. Get real-time recommendations based on water conditions, seasonal patterns, and local knowledge.
             </p>
             <div className="flex justify-center gap-4">
-              <button className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2">
+              <button className="bg-green-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-800 transition-colors flex items-center gap-2 shadow-lg">
                 <Smartphone className="w-5 h-5" />
                 Coming Soon to Android
               </button>
@@ -47,95 +37,100 @@ function App() {
       </header>
 
       {/* Features Section */}
-      <section className="py-20 px-4">
-        <div className="container mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">Smart Features for Smart Anglers</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <FeatureCard 
-              icon={Cloud}
-              title="Weather Integration"
-              description="Real-time weather data to help you choose the perfect fly for current conditions."
-            />
-            <FeatureCard 
-              icon={Map}
-              title="Local Intelligence"
-              description="Access location-specific fly recommendations based on historical success rates."
-            />
-            <FeatureCard 
-              icon={Calendar}
-              title="Seasonal Patterns"
-              description="Stay informed about seasonal hatches and fish behavior patterns."
-            />
-            <FeatureCard 
-              icon={BookMarked}
-              title="Personal Fly Box"
-              description="Create and organize your digital fly collection with favorites and notes."
-            />
-            <FeatureCard 
-              icon={Upload}
-              title="Catch Returns"
-              description="Log your catches and track your success with different flies and conditions."
-            />
-            <FeatureCard 
-              icon={Fish}
-              title="Species Targeting"
-              description="Specialized recommendations for different fish species and water types."
-            />
+      <section className="py-16 bg-white/80 backdrop-blur-sm">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-800">Why Every Angler Needs This</h2>
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="p-6 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <Fish className="w-6 h-6 text-green-700" />
+              </div>
+              <h3 className="text-xl font-semibold mb-3">Smart Fly Selection</h3>
+              <p className="text-gray-600">
+                Get precise fly recommendations based on current hatches and fish feeding patterns.
+              </p>
+            </div>
+            <div className="p-6 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                <Cloud className="w-6 h-6 text-blue-700" />
+              </div>
+              <h3 className="text-xl font-semibold mb-3">Weather Integration</h3>
+              <p className="text-gray-600">
+                Real-time weather and water conditions to optimize your fishing strategy.
+              </p>
+            </div>
+            <div className="p-6 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                <Map className="w-6 h-6 text-amber-700" />
+              </div>
+              <h3 className="text-xl font-semibold mb-3">Local Knowledge</h3>
+              <p className="text-gray-600">
+                Access patterns and techniques that work on your local waters.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Seasonal Section */}
+      <section className="py-16 bg-gradient-to-b from-green-800 to-green-900 text-white">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12">Year-Round Fishing Success</h2>
+          <div className="grid md:grid-cols-4 gap-6">
+            <div className="text-center p-6">
+              <h3 className="text-xl font-semibold mb-3">Spring</h3>
+              <p className="text-gray-200">
+                BWOs, March Browns, and early season hatches
+              </p>
+            </div>
+            <div className="text-center p-6">
+              <h3 className="text-xl font-semibold mb-3">Summer</h3>
+              <p className="text-gray-200">
+                Terrestrials, PMDs, and evening caddis
+              </p>
+            </div>
+            <div className="text-center p-6">
+              <h3 className="text-xl font-semibold mb-3">Fall</h3>
+              <p className="text-gray-200">
+                Hoppers, autumn mayflies, and streamers
+              </p>
+            </div>
+            <div className="text-center p-6">
+              <h3 className="text-xl font-semibold mb-3">Winter</h3>
+              <p className="text-gray-200">
+                Midges, winter stones, and nymphing tactics
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="bg-blue-600 text-white py-16">
+      <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-6">Be the First to Know</h2>
-          <p className="text-xl mb-8 max-w-2xl mx-auto">
-            Join our waiting list to get early access and exclusive updates about our launch.
+          <h2 className="text-3xl font-bold mb-6">Ready to Improve Your Catch Rate?</h2>
+          <p className="text-xl text-gray-600 mb-8">
+            Join the waitlist for early access and exclusive fishing tips.
           </p>
-          <div className="max-w-md mx-auto flex gap-4">
-            <input 
-              type="email" 
-              placeholder="Enter your email"
-              className="flex-1 px-4 py-3 rounded-lg text-gray-900"
-            />
-            <button className="bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
-              Notify Me
-            </button>
-          </div>
+          <button className="bg-green-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-800 transition-colors shadow-lg">
+            Join Waitlist
+          </button>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-300 py-12">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="mb-6 md:mb-0">
-              <h3 className="text-xl font-semibold flex items-center gap-2">
-                <Fish className="w-6 h-6" />
-                HookedOnFlies
-              </h3>
-              <p className="mt-2">Your smart fly fishing companion</p>
-            </div>
-            <div className="flex gap-8 items-center">
-              <a href="#" className="hover:text-white transition-colors">About</a>
-              <a href="#" className="hover:text-white transition-colors">Privacy</a>
-              <a href="#" className="hover:text-white transition-colors">Contact</a>
-              <button 
-                onClick={() => setShowAdminLogin(true)}
-                className="text-gray-400 hover:text-white transition-colors flex items-center gap-1"
-              >
-                <Lock className="w-4 h-4" />
-                <span className="sr-only">Admin</span>
-              </button>
-            </div>
-          </div>
-          <div className="mt-8 pt-8 border-t border-gray-800 text-center">
-            <p>&copy; {new Date().getFullYear()} HookedOnFlies. All rights reserved.</p>
-          </div>
+      <footer className="bg-gray-800 text-gray-300 py-8">
+        <div className="container mx-auto px-4 text-center">
+          <p className="mb-4">© 2024 Fly Selection App. All rights reserved.</p>
+          <button 
+            onClick={() => setShowAdminLogin(true)}
+            className="text-gray-400 hover:text-gray-300 text-sm"
+          >
+            Admin Access
+          </button>
         </div>
       </footer>
 
-      {/* Admin Login Modal */}
       {showAdminLogin && !isLoggedIn && (
         <AdminLogin
           onLogin={() => {
@@ -146,7 +141,6 @@ function App() {
         />
       )}
 
-      {/* Admin Panel */}
       {isLoggedIn && <AdminPanel />}
     </div>
   );
