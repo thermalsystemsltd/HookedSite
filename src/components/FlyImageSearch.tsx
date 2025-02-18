@@ -75,8 +75,14 @@ export function FlyImageSearch() {
     setMessage('');
 
     try {
-      // Download image
-      const response = await fetch(imageUrl);
+      // Use Cloudflare Worker to proxy the image request
+      const proxyUrl = `/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+      const response = await fetch(proxyUrl);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch image');
+      }
+
       const blob = await response.blob();
       
       // Upload to Supabase
