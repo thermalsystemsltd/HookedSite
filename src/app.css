@@ -1,0 +1,6 @@
+.bg-hero {
+  background-image: url('/fly-fishing-hero.jpg');
+  background-size: cover;
+  background-position: center 33%;
+  background-repeat: no-repeat;
+}

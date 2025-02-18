@@ -1,15 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { X, Plus, Loader, Wand2 } from 'lucide-react';
 import { queryOpenAI } from '../lib/openai';
 
 interface Pattern {
-  month: string;
-  time_of_day: string;
-  water_temperature: string;
-  water_level: string;
-  water_clarity: string;
-  weather_condition: string;
+  season_start: string;
+  season_end: string;
+  temp_min: number;
+  temp_max: number;
 }
 
 interface FlyForm {
@@ -17,20 +15,18 @@ interface FlyForm {
   description: string;
   image_url: string;
   categories: string[];
-  seasons: string[];
-  water_types: string[];
+  season: string[];
+  water_type: string[];
   target_species: string[];
   weather_conditions: string[];
   patterns: Pattern[];
 }
 
 const INITIAL_PATTERN: Pattern = {
-  month: '',
-  time_of_day: '',
-  water_temperature: '',
-  water_level: '',
-  water_clarity: '',
-  weather_condition: ''
+  season_start: '03', // March
+  season_end: '05',   // May
+  temp_min: 45,       // Fahrenheit
+  temp_max: 65
 };
 
 const INITIAL_FORM_STATE: FlyForm = {
@@ -38,8 +34,8 @@ const INITIAL_FORM_STATE: FlyForm = {
   description: '',
   image_url: '',
   categories: [],
-  seasons: [],
-  water_types: [],
+  season: [],
+  water_type: [],
   target_species: [],
   weather_conditions: [],
   patterns: [{ ...INITIAL_PATTERN }]
@@ -51,39 +47,84 @@ export function AddFlyData() {
   const [message, setMessage] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
 
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) {
+        // Redirect to login or handle session expiry
+        window.location.href = '/'; // or however you handle auth
+      }
+    };
+
+    checkSession();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setMessage('');
 
     try {
-      // Insert into flies table
-      const { data: flyData, error: flyError } = await supabase
+      // First check if fly exists
+      const { data: existingFly } = await supabase
         .from('flies')
-        .insert([{
-          name: formData.name,
-          description: formData.description,
-          image_url: formData.image_url,
-          categories: formData.categories,
-          seasons: formData.seasons,
-          water_types: formData.water_types,
-          target_species: formData.target_species,
-          weather_conditions: formData.weather_conditions
-        }])
-        .select()
+        .select('*')
+        .eq('name', formData.name)
         .single();
 
-      if (flyError) throw flyError;
+      if (existingFly) {
+        // If fly exists, update it while preserving the image_url if no new one is provided
+        const { error: flyError } = await supabase
+          .from('flies')
+          .update({
+            description: formData.description,
+            image_url: formData.image_url || existingFly.image_url,
+            categories: formData.categories,
+            season: formData.season,
+            water_type: formData.water_type,
+            target_species: formData.target_species,
+            weather_conditions: formData.weather_conditions
+          })
+          .eq('name', formData.name);
 
-      // Insert patterns
-      const patternsToInsert = formData.patterns.map(pattern => ({
-        fly_name: formData.name,
-        ...pattern
-      }));
+        if (flyError) throw flyError;
+      } else {
+        // If fly doesn't exist, insert it
+        const { error: flyError } = await supabase
+          .from('flies')
+          .insert([{
+            name: formData.name,
+            description: formData.description,
+            image_url: formData.image_url,
+            categories: formData.categories,
+            season: formData.season,
+            water_type: formData.water_type,
+            target_species: formData.target_species,
+            weather_conditions: formData.weather_conditions
+          }]);
 
+        if (flyError) throw flyError;
+      }
+
+      // Delete existing patterns for this fly
+      const { error: deleteError } = await supabase
+        .from('seasonal_fly_patterns')
+        .delete()
+        .eq('fly_name', formData.name);
+
+      if (deleteError) throw deleteError;
+
+      // Insert new patterns
       const { error: patternError } = await supabase
         .from('seasonal_fly_patterns')
-        .insert(patternsToInsert);
+        .insert(formData.patterns.map(pattern => ({
+          fly_name: formData.name,
+          season_start: pattern.season_start,
+          season_end: pattern.season_end,
+          temp_min: pattern.temp_min,
+          temp_max: pattern.temp_max,
+          created_at: new Date().toISOString()
+        })));
 
       if (patternError) throw patternError;
 
@@ -124,43 +165,119 @@ export function AddFlyData() {
       const descriptionPrompt = `What type of fly is the ${formData.name}? Please provide a brief description for fly fishing.`;
       const description = await queryOpenAI(descriptionPrompt);
 
-      // Get target species
-      const speciesPrompt = `What species of fish does the ${formData.name} fly pattern typically target? Please list only the main species.`;
+      // Enhanced target species prompt
+      const speciesPrompt = `What species of fish does the ${formData.name} fly pattern typically target? Please list ONLY from these options, separated by commas: brown_trout, rainbow_trout, brook_trout, cutthroat_trout, salmon, steelhead, grayling. List ALL that apply.`;
       const speciesResponse = await queryOpenAI(speciesPrompt);
       const targetSpecies = speciesResponse
         .toLowerCase()
         .split(/[,.]/)
         .map(s => s.trim())
-        .filter(s => s)
-        .map(s => s.replace(/\s+/g, '_'));
+        .filter(s => [
+          'brown_trout',
+          'rainbow_trout',
+          'brook_trout',
+          'cutthroat_trout',
+          'salmon',
+          'steelhead',
+          'grayling'
+        ].includes(s.replace(/\s+/g, '_')));
 
       // Get seasons
-      const seasonsPrompt = `What time of year is the ${formData.name} fly best used? Please list only the seasons: spring, summer, fall, or winter.`;
+      const seasonsPrompt = `What seasons is the ${formData.name} fly effective in? List ALL suitable seasons (spring, summer, fall, winter), separated by commas.`;
       const seasonsResponse = await queryOpenAI(seasonsPrompt);
-      const seasons = seasonsResponse
+      const season = seasonsResponse
         .toLowerCase()
         .split(/[,.]/)
         .map(s => s.trim())
         .filter(s => ['spring', 'summer', 'fall', 'winter'].includes(s));
 
-      // Get categories
-      const categoriesPrompt = `Which single category best describes the ${formData.name}: dry_fly, nymph, streamer, emerger, or terrestrial?`;
-      const categoryResponse = await queryOpenAI(categoriesPrompt);
-      const category = categoryResponse
+      // Get water types
+      const waterTypesPrompt = `What types of water is the ${formData.name} fly best used in? List ALL suitable water types (river, stream, lake, pond, saltwater), separated by commas.`;
+      const waterTypesResponse = await queryOpenAI(waterTypesPrompt);
+      const waterType = waterTypesResponse
         .toLowerCase()
-        .trim()
-        .replace(/\s+/g, '_');
+        .split(/[,.]/)
+        .map(s => s.trim())
+        .filter(s => ['river', 'stream', 'lake', 'pond', 'saltwater'].includes(s));
+
+      // Get categories
+      const categoriesPrompt = `What categories does the ${formData.name} fly belong to? List ALL applicable categories (dry_fly, wet_fly, nymph, streamer, emerger, terrestrial, buzzer), separated by commas.`;
+      const categoriesResponse = await queryOpenAI(categoriesPrompt);
+      const categories = categoriesResponse
+        .toLowerCase()
+        .split(/[,.]/)
+        .map(s => s.trim())
+        .filter(s => [
+          'dry_fly',
+          'wet_fly',
+          'nymph',
+          'streamer',
+          'emerger',
+          'terrestrial',
+          'buzzer'
+        ].includes(s.replace(/\s+/g, '_')));
+
+      // Get weather conditions
+      const weatherPrompt = `What weather conditions is the ${formData.name} fly best fished in? List ALL suitable conditions (sunny, cloudy, overcast, rain, storm), separated by commas.`;
+      const weatherResponse = await queryOpenAI(weatherPrompt);
+      const weatherConditions = weatherResponse
+        .toLowerCase()
+        .split(/[,.]/)
+        .map(s => s.trim())
+        .filter(s => ['sunny', 'cloudy', 'overcast', 'rain', 'storm'].includes(s));
+
+      // Updated seasonal patterns prompt
+      const patternsPrompt = `For the ${formData.name} fly, please provide optimal fishing seasons in the following format:
+        1. Season start month (1-12), Season end month (1-12), Minimum water temperature (°F), Maximum water temperature (°F)
+        Example: March(3) to May(5), 45°F to 65°F`;
+        
+      const patternsResponse = await queryOpenAI(patternsPrompt);
+      
+      // Parse the patterns response
+      const monthMap: { [key: string]: string } = {
+        'january': '01', 'february': '02', 'march': '03', 'april': '04',
+        'may': '05', 'june': '06', 'july': '07', 'august': '08',
+        'september': '09', 'october': '10', 'november': '11', 'december': '12'
+      };
+
+      const patterns: Pattern[] = [];
+      
+      try {
+        const text = patternsResponse.toLowerCase();
+        
+        // Extract months
+        const startMonth = Object.entries(monthMap).find(([month]) => text.includes(month))?.[1] || '03';
+        const endMonth = Object.entries(monthMap)
+          .filter(([month]) => text.includes(month))
+          .slice(-1)[0]?.[1] || '05';
+        
+        // Extract temperatures
+        const temps = text.match(/\d+°?f/g)?.map(t => parseInt(t)) || [45, 65];
+        
+        patterns.push({
+          season_start: startMonth,
+          season_end: endMonth,
+          temp_min: Math.min(...temps),
+          temp_max: Math.max(...temps)
+        });
+      } catch (error) {
+        console.error('Error parsing patterns:', error);
+        patterns.push(INITIAL_PATTERN);
+      }
 
       // Update form data
       setFormData(prev => ({
         ...prev,
         description,
         target_species: targetSpecies,
-        seasons,
-        categories: [category]
+        season,
+        water_type: waterType,
+        categories,
+        weather_conditions: weatherConditions,
+        patterns: patterns
       }));
 
-      setMessage('AI analysis complete!');
+      setMessage('AI analysis complete! Please review and adjust the suggestions as needed.');
     } catch (error: any) {
       setMessage(`AI Error: ${error.message}`);
     } finally {
@@ -230,6 +347,7 @@ export function AddFlyData() {
               <label className="block text-sm font-medium mb-1">Categories</label>
               <select
                 multiple
+                size={7}
                 className="w-full p-2 border rounded"
                 value={formData.categories}
                 onChange={(e) => setFormData({
@@ -238,22 +356,26 @@ export function AddFlyData() {
                 })}
               >
                 <option value="dry_fly">Dry Fly</option>
+                <option value="wet_fly">Wet Fly</option>
                 <option value="nymph">Nymph</option>
                 <option value="streamer">Streamer</option>
                 <option value="emerger">Emerger</option>
                 <option value="terrestrial">Terrestrial</option>
+                <option value="buzzer">Buzzer</option>
               </select>
+              <p className="text-sm text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Seasons</label>
+              <label className="block text-sm font-medium mb-1">Season</label>
               <select
                 multiple
+                size={4}
                 className="w-full p-2 border rounded"
-                value={formData.seasons}
+                value={formData.season}
                 onChange={(e) => setFormData({
                   ...formData,
-                  seasons: Array.from(e.target.selectedOptions, option => option.value)
+                  season: Array.from(e.target.selectedOptions, option => option.value)
                 })}
               >
                 <option value="spring">Spring</option>
@@ -261,17 +383,19 @@ export function AddFlyData() {
                 <option value="fall">Fall</option>
                 <option value="winter">Winter</option>
               </select>
+              <p className="text-sm text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Water Types</label>
+              <label className="block text-sm font-medium mb-1">Water Type</label>
               <select
                 multiple
+                size={5}
                 className="w-full p-2 border rounded"
-                value={formData.water_types}
+                value={formData.water_type}
                 onChange={(e) => setFormData({
                   ...formData,
-                  water_types: Array.from(e.target.selectedOptions, option => option.value)
+                  water_type: Array.from(e.target.selectedOptions, option => option.value)
                 })}
               >
                 <option value="river">River</option>
@@ -280,12 +404,14 @@ export function AddFlyData() {
                 <option value="pond">Pond</option>
                 <option value="saltwater">Saltwater</option>
               </select>
+              <p className="text-sm text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
             </div>
 
             <div>
               <label className="block text-sm font-medium mb-1">Target Species</label>
               <select
                 multiple
+                size={5}
                 className="w-full p-2 border rounded"
                 value={formData.target_species}
                 onChange={(e) => setFormData({
@@ -307,144 +433,101 @@ export function AddFlyData() {
 
         {/* Seasonal Patterns */}
         <section className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Seasonal Patterns</h3>
+          <h2 className="text-xl font-semibold mb-4">Seasonal Patterns</h2>
           
           {formData.patterns.map((pattern, index) => (
-            <div key={index} className="mb-4 p-4 border rounded relative">
-              <button
-                type="button"
-                onClick={() => removePattern(index)}
-                className="absolute top-2 right-2 text-red-500 hover:text-red-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
+            <div key={index} className="grid grid-cols-2 gap-4 mb-4 p-4 border rounded">
+              <div>
+                <label className="block text-sm font-medium mb-1">Season Start Month</label>
+                <select
+                  className="w-full p-2 border rounded"
+                  value={pattern.season_start}
+                  onChange={(e) => {
+                    const newPatterns = [...formData.patterns];
+                    newPatterns[index].season_start = e.target.value;
+                    setFormData({ ...formData, patterns: newPatterns });
+                  }}
+                >
+                  <option value="01">January</option>
+                  <option value="02">February</option>
+                  <option value="03">March</option>
+                  <option value="04">April</option>
+                  <option value="05">May</option>
+                  <option value="06">June</option>
+                  <option value="07">July</option>
+                  <option value="08">August</option>
+                  <option value="09">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Month</label>
-                  <select
-                    className="w-full p-2 border rounded"
-                    value={pattern.month}
-                    onChange={(e) => {
-                      const newPatterns = [...formData.patterns];
-                      newPatterns[index].month = e.target.value;
-                      setFormData({ ...formData, patterns: newPatterns });
-                    }}
-                  >
-                    <option value="">Select Month</option>
-                    {Array.from({ length: 12 }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>
-                        {new Date(0, i).toLocaleString('default', { month: 'long' })}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Season End Month</label>
+                <select
+                  className="w-full p-2 border rounded"
+                  value={pattern.season_end}
+                  onChange={(e) => {
+                    const newPatterns = [...formData.patterns];
+                    newPatterns[index].season_end = e.target.value;
+                    setFormData({ ...formData, patterns: newPatterns });
+                  }}
+                >
+                  <option value="01">January</option>
+                  <option value="02">February</option>
+                  <option value="03">March</option>
+                  <option value="04">April</option>
+                  <option value="05">May</option>
+                  <option value="06">June</option>
+                  <option value="07">July</option>
+                  <option value="08">August</option>
+                  <option value="09">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Time of Day</label>
-                  <select
-                    className="w-full p-2 border rounded"
-                    value={pattern.time_of_day}
-                    onChange={(e) => {
-                      const newPatterns = [...formData.patterns];
-                      newPatterns[index].time_of_day = e.target.value;
-                      setFormData({ ...formData, patterns: newPatterns });
-                    }}
-                  >
-                    <option value="">Select Time</option>
-                    <option value="morning">Morning</option>
-                    <option value="afternoon">Afternoon</option>
-                    <option value="evening">Evening</option>
-                    <option value="night">Night</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Min Temperature (°F)</label>
+                <input
+                  type="number"
+                  className="w-full p-2 border rounded"
+                  value={pattern.temp_min}
+                  onChange={(e) => {
+                    const newPatterns = [...formData.patterns];
+                    newPatterns[index].temp_min = parseInt(e.target.value);
+                    setFormData({ ...formData, patterns: newPatterns });
+                  }}
+                />
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">Water Temperature</label>
-                  <select
-                    className="w-full p-2 border rounded"
-                    value={pattern.water_temperature}
-                    onChange={(e) => {
-                      const newPatterns = [...formData.patterns];
-                      newPatterns[index].water_temperature = e.target.value;
-                      setFormData({ ...formData, patterns: newPatterns });
-                    }}
-                  >
-                    <option value="">Select Temperature</option>
-                    <option value="cold">Cold (Below 50°F)</option>
-                    <option value="cool">Cool (50-60°F)</option>
-                    <option value="moderate">Moderate (60-70°F)</option>
-                    <option value="warm">Warm (Above 70°F)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Water Level</label>
-                  <select
-                    className="w-full p-2 border rounded"
-                    value={pattern.water_level}
-                    onChange={(e) => {
-                      const newPatterns = [...formData.patterns];
-                      newPatterns[index].water_level = e.target.value;
-                      setFormData({ ...formData, patterns: newPatterns });
-                    }}
-                  >
-                    <option value="">Select Level</option>
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="flood">Flood</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Water Clarity</label>
-                  <select
-                    className="w-full p-2 border rounded"
-                    value={pattern.water_clarity}
-                    onChange={(e) => {
-                      const newPatterns = [...formData.patterns];
-                      newPatterns[index].water_clarity = e.target.value;
-                      setFormData({ ...formData, patterns: newPatterns });
-                    }}
-                  >
-                    <option value="">Select Clarity</option>
-                    <option value="clear">Clear</option>
-                    <option value="stained">Stained</option>
-                    <option value="murky">Murky</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Weather Condition</label>
-                  <select
-                    className="w-full p-2 border rounded"
-                    value={pattern.weather_condition}
-                    onChange={(e) => {
-                      const newPatterns = [...formData.patterns];
-                      newPatterns[index].weather_condition = e.target.value;
-                      setFormData({ ...formData, patterns: newPatterns });
-                    }}
-                  >
-                    <option value="">Select Weather</option>
-                    <option value="sunny">Sunny</option>
-                    <option value="cloudy">Cloudy</option>
-                    <option value="overcast">Overcast</option>
-                    <option value="rain">Rain</option>
-                    <option value="storm">Storm</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Max Temperature (°F)</label>
+                <input
+                  type="number"
+                  className="w-full p-2 border rounded"
+                  value={pattern.temp_max}
+                  onChange={(e) => {
+                    const newPatterns = [...formData.patterns];
+                    newPatterns[index].temp_max = parseInt(e.target.value);
+                    setFormData({ ...formData, patterns: newPatterns });
+                  }}
+                />
               </div>
             </div>
           ))}
 
-          <button
+          <button 
             type="button"
-            onClick={addPattern}
-            className="mt-4 flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            onClick={() => setFormData({
+              ...formData,
+              patterns: [...formData.patterns, { ...INITIAL_PATTERN }]
+            })}
           >
-            <Plus className="w-4 h-4" />
-            Add Pattern
+            Add Another Pattern
           </button>
         </section>
 
