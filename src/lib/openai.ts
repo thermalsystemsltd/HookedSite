@@ -1,4 +1,4 @@
-const OPENAI_API_KEY = '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';
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
 export async function queryOpenAI(prompt: string) {
   try {
@@ -16,10 +16,20 @@ export async function queryOpenAI(prompt: string) {
       })
     });
 
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || 'OpenAI API request failed');
+    }
+
     const data = await response.json();
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('Invalid response format from OpenAI');
+    }
+
     return data.choices[0].message.content.trim();
   } catch (error) {
     console.error('OpenAI API Error:', error);
-    throw error;
+    throw new Error(`OpenAI API Error: ${error.message}`);
   }
 } 
