@@ -50,8 +50,10 @@ export function FlyImageSearch() {
     setSelectedFly(fly);
     
     try {
+      // Enhance search query with fly fishing context
+      const searchQuery = `${fly.name} fly fishing pattern fly tying`;
       const response = await fetch(
-        `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${fly.name} fly fishing fly&searchType=image&num=5`
+        `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=5`
       );
       
       const data = await response.json();
