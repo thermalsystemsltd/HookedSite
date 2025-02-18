@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Upload } from 'lucide-react';
+import { FlyImageSearch } from './FlyImageSearch';
 
 export function AdminPanel() {
+  const [activeTab, setActiveTab] = useState('add'); // 'add' or 'search'
   const [flyName, setFlyName] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState('');
@@ -96,83 +98,113 @@ export function AdminPanel() {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">Admin Panel</h2>
           <button onClick={handleLogout} className="text-blue-600 hover:text-blue-800">
             Logout
           </button>
         </div>
-        {message && (
-          <div className={`p-4 rounded mb-4 ${message.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-            {message}
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Fly Name
-            </label>
-            <input
-              type="text"
-              value={flyName}
-              onChange={(e) => setFlyName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
-              required
-              placeholder="Enter fly name (will update image if fly exists)"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Fly Image
-            </label>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-              <div className="space-y-1 text-center">
-                {previewUrl ? (
-                  <div className="mb-4">
-                    <img
-                      src={previewUrl}
-                      alt="Preview"
-                      className="mx-auto h-32 w-auto object-contain"
-                    />
-                  </div>
-                ) : (
-                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                )}
-                <div className="flex text-sm text-gray-600">
-                  <label
-                    htmlFor="file-upload"
-                    className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none"
-                  >
-                    <span>Upload a file</span>
-                    <input
-                      id="file-upload"
-                      name="file-upload"
-                      type="file"
-                      className="sr-only"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      required
-                    />
-                  </label>
-                  <p className="pl-1">or drag and drop</p>
-                </div>
-                <p className="text-xs text-gray-500">
-                  PNG, JPG, GIF up to 10MB
-                </p>
-              </div>
-            </div>
-          </div>
 
+        <div className="flex gap-4 mb-6">
           <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50"
+            onClick={() => setActiveTab('add')}
+            className={`px-4 py-2 rounded ${
+              activeTab === 'add' 
+                ? 'bg-blue-600 text-white' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
           >
-            {loading ? 'Saving...' : 'Save Fly'}
+            Add New Fly
           </button>
-        </form>
+          <button
+            onClick={() => setActiveTab('search')}
+            className={`px-4 py-2 rounded ${
+              activeTab === 'search' 
+                ? 'bg-blue-600 text-white' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            Search & Update Images
+          </button>
+        </div>
+
+        {activeTab === 'add' ? (
+          <div>
+            {message && (
+              <div className={`p-4 rounded mb-4 ${message.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                {message}
+              </div>
+            )}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Fly Name
+                </label>
+                <input
+                  type="text"
+                  value={flyName}
+                  onChange={(e) => setFlyName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                  required
+                  placeholder="Enter fly name (will update image if fly exists)"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Fly Image
+                </label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                  <div className="space-y-1 text-center">
+                    {previewUrl ? (
+                      <div className="mb-4">
+                        <img
+                          src={previewUrl}
+                          alt="Preview"
+                          className="mx-auto h-32 w-auto object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                    )}
+                    <div className="flex text-sm text-gray-600">
+                      <label
+                        htmlFor="file-upload"
+                        className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none"
+                      >
+                        <span>Upload a file</span>
+                        <input
+                          id="file-upload"
+                          name="file-upload"
+                          type="file"
+                          className="sr-only"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          required
+                        />
+                      </label>
+                      <p className="pl-1">or drag and drop</p>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      PNG, JPG, GIF up to 10MB
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading ? 'Saving...' : 'Save Fly'}
+              </button>
+            </form>
+          </div>
+        ) : (
+          <FlyImageSearch />
+        )}
       </div>
     </div>
   );
