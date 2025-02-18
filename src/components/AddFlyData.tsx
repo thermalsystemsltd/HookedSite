@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { X, Plus, Loader } from 'lucide-react';
+import { X, Plus, Loader, Wand2 } from 'lucide-react';
+import { queryOpenAI } from '../lib/openai';
 
 interface Pattern {
   month: string;
@@ -48,6 +49,7 @@ export function AddFlyData() {
   const [formData, setFormData] = useState<FlyForm>(INITIAL_FORM_STATE);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,6 +110,64 @@ export function AddFlyData() {
     });
   };
 
+  const generateAIContent = async () => {
+    if (!formData.name) {
+      setMessage('Please enter a fly name first');
+      return;
+    }
+
+    setAiLoading(true);
+    setMessage('AI is analyzing the fly...');
+
+    try {
+      // Get description
+      const descriptionPrompt = `What type of fly is the ${formData.name}? Please provide a brief description for fly fishing.`;
+      const description = await queryOpenAI(descriptionPrompt);
+
+      // Get target species
+      const speciesPrompt = `What species of fish does the ${formData.name} fly pattern typically target? Please list only the main species.`;
+      const speciesResponse = await queryOpenAI(speciesPrompt);
+      const targetSpecies = speciesResponse
+        .toLowerCase()
+        .split(/[,.]/)
+        .map(s => s.trim())
+        .filter(s => s)
+        .map(s => s.replace(/\s+/g, '_'));
+
+      // Get seasons
+      const seasonsPrompt = `What time of year is the ${formData.name} fly best used? Please list only the seasons: spring, summer, fall, or winter.`;
+      const seasonsResponse = await queryOpenAI(seasonsPrompt);
+      const seasons = seasonsResponse
+        .toLowerCase()
+        .split(/[,.]/)
+        .map(s => s.trim())
+        .filter(s => ['spring', 'summer', 'fall', 'winter'].includes(s));
+
+      // Get categories
+      const categoriesPrompt = `Which single category best describes the ${formData.name}: dry_fly, nymph, streamer, emerger, or terrestrial?`;
+      const categoryResponse = await queryOpenAI(categoriesPrompt);
+      const category = categoryResponse
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '_');
+
+      // Update form data
+      setFormData(prev => ({
+        ...prev,
+        description,
+        target_species: targetSpecies,
+        seasons,
+        categories: [category]
+      }));
+
+      setMessage('AI analysis complete!');
+    } catch (error: any) {
+      setMessage(`AI Error: ${error.message}`);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <h2 className="text-2xl font-bold mb-6">Add New Fly</h2>
@@ -127,13 +187,28 @@ export function AddFlyData() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Name</label>
-              <input
-                type="text"
-                required
-                className="w-full p-2 border rounded"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  className="flex-1 p-2 border rounded"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+                <button
+                  type="button"
+                  onClick={generateAIContent}
+                  disabled={aiLoading || !formData.name}
+                  className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {aiLoading ? (
+                    <Loader className="animate-spin w-4 h-4" />
+                  ) : (
+                    <Wand2 className="w-4 h-4" />
+                  )}
+                  AI Assist
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Description</label>
