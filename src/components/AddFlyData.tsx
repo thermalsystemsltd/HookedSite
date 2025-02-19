@@ -25,8 +25,8 @@ interface FlyForm {
 const INITIAL_PATTERN: Pattern = {
   season_start: '03', // March
   season_end: '05',   // May
-  temp_min: 45,       // Fahrenheit
-  temp_max: 65
+  temp_min: 7,        // Celsius (was 45°F)
+  temp_max: 18        // Celsius (was 65°F)
 };
 
 const INITIAL_FORM_STATE: FlyForm = {
@@ -301,8 +301,8 @@ export function AddFlyData() {
 
       // Updated seasonal patterns prompt
       const patternsPrompt = `For the ${formData.name} fly, please provide optimal fishing seasons in the following format:
-        1. Season start month (1-12), Season end month (1-12), Minimum water temperature (°F), Maximum water temperature (°F)
-        Example: March(3) to May(5), 45°F to 65°F`;
+        1. Season start month (1-12), Season end month (1-12), Minimum water temperature (°C), Maximum water temperature (°C)
+        Example: March(3) to May(5), 7°C to 18°C`;
         
       const patternsResponse = await queryOpenAI(patternsPrompt);
       
@@ -324,8 +324,8 @@ export function AddFlyData() {
           .filter(([month]) => text.includes(month))
           .slice(-1)[0]?.[1] || '05';
         
-        // Extract temperatures
-        const temps = text.match(/\d+°?f/g)?.map(t => parseInt(t)) || [45, 65];
+        // Extract temperatures (now looking for Celsius)
+        const temps = text.match(/\d+°?c/g)?.map(t => parseInt(t)) || [7, 18];
         
         patterns.push({
           season_start: startMonth,
@@ -592,7 +592,7 @@ export function AddFlyData() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Min Temperature (°F)</label>
+                <label className="block text-sm font-medium mb-1">Min Temperature (°C)</label>
                 <input
                   type="number"
                   className="w-full p-2 border rounded"
@@ -606,7 +606,7 @@ export function AddFlyData() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Max Temperature (°F)</label>
+                <label className="block text-sm font-medium mb-1">Max Temperature (°C)</label>
                 <input
                   type="number"
                   className="w-full p-2 border rounded"
