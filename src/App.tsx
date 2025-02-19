@@ -3,10 +3,13 @@ import { Smartphone, Fish, Cloud, Droplets, Mountain, Map } from 'lucide-react';
 import { AdminLogin } from './components/AdminLogin';
 import { AdminPanel } from './components/AdminPanel';
 import { Layout } from './components/Layout';
+import { AppShowcase } from './components/AppShowcase';
+import { WaitlistForm } from './components/WaitlistForm';
 
 function App() {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showWaitlistForm, setShowWaitlistForm] = useState(false);
 
   return (
     <Layout>
@@ -28,15 +31,18 @@ function App() {
               <p className="text-xl text-white/90 mb-8">
                 Match the hatch with precision. Get real-time recommendations based on water conditions, seasonal patterns, and local knowledge.
               </p>
-              <div className="flex justify-center gap-4">
-                <button className="bg-green-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-800 transition-colors flex items-center gap-2 shadow-lg">
-                  <Smartphone className="w-5 h-5" />
-                  Coming Soon to Android
-                </button>
-              </div>
+              <button 
+                onClick={() => setShowWaitlistForm(true)}
+                className="bg-green-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-800 transition-colors shadow-lg"
+              >
+                Join Waitlist
+              </button>
             </div>
           </div>
         </header>
+
+        {/* Add the showcase section */}
+        <AppShowcase />
 
         {/* Features Section */}
         <section className="py-16 bg-white/80 backdrop-blur-sm">
@@ -114,7 +120,10 @@ function App() {
             <p className="text-xl text-gray-600 mb-8">
               Join the waitlist for early access and exclusive fishing tips.
             </p>
-            <button className="bg-green-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-800 transition-colors shadow-lg">
+            <button 
+              onClick={() => setShowWaitlistForm(true)}
+              className="bg-green-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-800 transition-colors shadow-lg"
+            >
               Join Waitlist
             </button>
           </div>
@@ -144,6 +153,14 @@ function App() {
         )}
 
         {isLoggedIn && <AdminPanel />}
+
+        {showWaitlistForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg max-w-md w-full">
+              <WaitlistForm onClose={() => setShowWaitlistForm(false)} />
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
