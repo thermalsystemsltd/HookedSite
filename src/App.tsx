@@ -9,6 +9,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { PrivacyPolicy } from './pages/PrivacyPolicy';
 import { PrivacyPolicyApp } from './pages/PrivacyPolicyApp';
 import { Footer } from './components/Footer';
+import { DeleteMyData } from './pages/DeleteMyData';
 
 // Create a Home component for the main page content
 function Home({ showAdminLogin, setShowAdminLogin }) {
@@ -96,6 +97,7 @@ function App() {
             <Route path="/" element={<Home showAdminLogin={showAdminLogin} setShowAdminLogin={setShowAdminLogin} />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/privacy-app" element={<PrivacyPolicyApp />} />
+            <Route path="/deletemydata" element={<DeleteMyData />} />
           </Routes>
           <Footer onAdminClick={() => setShowAdminLogin(true)} />
         </div>

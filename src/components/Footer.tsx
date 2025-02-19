@@ -39,6 +39,11 @@ export function Footer({ onAdminClick }: FooterProps) {
                   Cookie Policy
                 </a>
               </li>
+              <li>
+                <a href="/deletemydata" className="text-gray-400 hover:text-white text-sm">
+                  Delete My Data
+                </a>
+              </li>
             </ul>
           </div>
 
