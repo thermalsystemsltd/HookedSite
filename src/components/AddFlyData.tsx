@@ -46,6 +46,8 @@ export function AddFlyData() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [incompleteFlies, setIncompleteFlies] = useState<string[]>([]);
+  const [loadingIncompleteFly, setLoadingIncompleteFly] = useState(false);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -58,6 +60,62 @@ export function AddFlyData() {
 
     checkSession();
   }, []);
+
+  useEffect(() => {
+    fetchIncompleteFlies();
+  }, []);
+
+  const fetchIncompleteFlies = async () => {
+    const { data, error } = await supabase
+      .from('seasonal_fly_patterns')
+      .select('fly_name')
+      .or('temp_min.is.null,temp_max.is.null,season_start.is.null,season_end.is.null');
+
+    if (error) {
+      console.error('Error fetching incomplete flies:', error);
+      return;
+    }
+
+    setIncompleteFlies(data.map(fly => fly.fly_name));
+  };
+
+  const handleSelectIncompleteFly = async (flyName: string) => {
+    setLoadingIncompleteFly(true);
+    try {
+      // Fetch existing fly data
+      const { data: flyData, error: flyError } = await supabase
+        .from('flies')
+        .select('*')
+        .eq('name', flyName)
+        .single();
+
+      if (flyError) {
+        setMessage(`Error fetching fly data: ${flyError.message}`);
+        return;
+      }
+
+      // Set the form data with existing fly info
+      setFormData({
+        ...INITIAL_FORM_STATE,
+        name: flyData.name,
+        description: flyData.description || '',
+        image_url: flyData.image_url || '',
+        categories: flyData.categories || [],
+        season: flyData.season || [],
+        water_type: flyData.water_type || [],
+        target_species: flyData.target_species || [],
+        weather_conditions: flyData.weather_conditions || [],
+        patterns: [{ ...INITIAL_PATTERN }]
+      });
+
+      // Generate AI content for the selected fly
+      await generateAIContent();
+    } catch (error: any) {
+      setMessage(`Error: ${error.message}`);
+    } finally {
+      setLoadingIncompleteFly(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,6 +198,9 @@ export function AddFlyData() {
         // Don't throw error here to avoid interrupting the main flow
       }
 
+      // After successful save, refresh the incomplete flies list
+      await fetchIncompleteFlies();
+      
       setMessage('Fly data saved successfully!');
       setFormData(INITIAL_FORM_STATE);
     } catch (error: any) {
@@ -299,6 +360,35 @@ export function AddFlyData() {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+      {/* Incomplete Flies Dropdown */}
+      {incompleteFlies.length > 0 && (
+        <div className="mb-8 p-4 bg-blue-900/50 rounded-lg">
+          <h3 className="text-lg font-semibold text-white mb-3">
+            Complete Missing Fly Data
+          </h3>
+          <div className="flex gap-4">
+            <select
+              className="flex-1 px-4 py-2 rounded bg-white text-gray-900 border border-white/20"
+              onChange={(e) => e.target.value && handleSelectIncompleteFly(e.target.value)}
+              value=""
+              disabled={loadingIncompleteFly}
+            >
+              <option value="" className="text-gray-600">
+                {loadingIncompleteFly ? 'Loading...' : 'Select a fly to complete...'}
+              </option>
+              {incompleteFlies.map(flyName => (
+                <option key={flyName} value={flyName} className="text-gray-900">
+                  {flyName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-sm text-white/70 mt-2">
+            {incompleteFlies.length} flies need additional information
+          </p>
+        </div>
+      )}
+
       <h2 className="text-2xl font-bold mb-6">Add New Fly</h2>
 
       {message && (
