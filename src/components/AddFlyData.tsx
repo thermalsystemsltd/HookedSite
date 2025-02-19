@@ -128,6 +128,18 @@ export function AddFlyData() {
 
       if (patternError) throw patternError;
 
+      // Run the query to insert missing flies
+      const { error: missingFliesError } = await supabase
+        .rpc('insert_missing_flies', {}, {
+          head: false,
+          count: 'exact'
+        });
+
+      if (missingFliesError) {
+        console.error('Error inserting missing flies:', missingFliesError);
+        // Don't throw error here to avoid interrupting the main flow
+      }
+
       setMessage('Fly data saved successfully!');
       setFormData(INITIAL_FORM_STATE);
     } catch (error: any) {
