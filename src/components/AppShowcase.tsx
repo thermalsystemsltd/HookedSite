@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { trackEvent } from '../lib/analytics';
 
 const screenshots = [
   {
@@ -51,10 +52,20 @@ export function AppShowcase() {
 
   const next = () => {
     setCurrentIndex((prev) => (prev + 1) % screenshots.length);
+    trackEvent(
+      'showcase_navigation',
+      'engagement',
+      'Next Screenshot'
+    );
   };
 
   const prev = () => {
     setCurrentIndex((prev) => (prev - 1 + screenshots.length) % screenshots.length);
+    trackEvent(
+      'showcase_navigation',
+      'engagement',
+      'Previous Screenshot'
+    );
   };
 
   return (

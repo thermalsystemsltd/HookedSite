@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { trackEvent } from '../lib/analytics';
 
 interface WaitlistFormProps {
   onClose: () => void;
@@ -25,6 +26,12 @@ export function WaitlistForm({ onClose }: WaitlistFormProps) {
 
       if (error) throw error;
       
+      trackEvent(
+        'waitlist_signup',
+        'engagement',
+        'Waitlist Form Submission'
+      );
+
       setMessage('Successfully joined the waitlist!');
       setTimeout(() => {
         onClose();
