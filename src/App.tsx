@@ -16,13 +16,6 @@ function App() {
       <div className="min-h-screen">
         {/* Hero Section */}
         <header className="relative">
-          <div className="absolute inset-0 z-0">
-            <img 
-              src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&q=80"
-              alt="Fly fishing background"
-              className="w-full h-full object-cover opacity-30"
-            />
-          </div>
           <div className="relative z-10 container mx-auto px-4 pt-24 pb-32">
             <div className="max-w-3xl mx-auto text-center">
               <h1 className="text-5xl font-bold text-white mb-6">
