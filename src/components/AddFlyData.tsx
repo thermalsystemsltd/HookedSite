@@ -19,7 +19,10 @@ interface FlyForm {
   water_type: string[];
   target_species: string[];
   weather_conditions: string[];
-  patterns: Pattern[];
+  season_start: string;
+  season_end: string;
+  temp_min: number;
+  temp_max: number;
 }
 
 const INITIAL_PATTERN: Pattern = {
@@ -38,7 +41,10 @@ const INITIAL_FORM_STATE: FlyForm = {
   water_type: [],
   target_species: [],
   weather_conditions: [],
-  patterns: [{ ...INITIAL_PATTERN }]
+  season_start: '03', // March
+  season_end: '05',   // May
+  temp_min: 7,        // Celsius
+  temp_max: 18        // Celsius
 };
 
 export function AddFlyData() {
@@ -67,16 +73,17 @@ export function AddFlyData() {
 
   const fetchIncompleteFlies = async () => {
     const { data, error } = await supabase
-      .from('seasonal_fly_patterns')
-      .select('fly_name')
-      .or('temp_min.is.null,temp_max.is.null,season_start.is.null,season_end.is.null');
+      .from('flies')
+      .select('name')
+      .or('temp_min.is.null,temp_max.is.null,season_start.is.null,season_end.is.null,description.is.null')
+      .order('name');
 
     if (error) {
       console.error('Error fetching incomplete flies:', error);
       return;
     }
 
-    setIncompleteFlies(data.map(fly => fly.fly_name));
+    setIncompleteFlies(data.map(fly => fly.name));
   };
 
   const handleSelectIncompleteFly = async (flyName: string) => {
@@ -105,7 +112,10 @@ export function AddFlyData() {
         water_type: flyData.water_type || [],
         target_species: flyData.target_species || [],
         weather_conditions: flyData.weather_conditions || [],
-        patterns: [{ ...INITIAL_PATTERN }]
+        season_start: flyData.season_start || '03',
+        season_end: flyData.season_end || '05',
+        temp_min: flyData.temp_min || 7,
+        temp_max: flyData.temp_max || 18
       });
 
       // Generate AI content for the selected fly
@@ -117,8 +127,38 @@ export function AddFlyData() {
     }
   };
 
+  const validateTemperatureRange = (min: number, max: number): string | null => {
+    if (min < -10 || max > 35) return 'Temperature should be between -10°C and 35°C';
+    if (min > max) return 'Minimum temperature cannot be higher than maximum';
+    return null;
+  };
+
+  const validateSeasonRange = (start: string, end: string): string | null => {
+    const startNum = parseInt(start);
+    const endNum = parseInt(end);
+    if (startNum < 1 || startNum > 12 || endNum < 1 || endNum > 12) {
+      return 'Invalid month number';
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate temperature range
+    const tempError = validateTemperatureRange(formData.temp_min, formData.temp_max);
+    if (tempError) {
+      setMessage(tempError);
+      return;
+    }
+
+    // Validate season range
+    const seasonError = validateSeasonRange(formData.season_start, formData.season_end);
+    if (seasonError) {
+      setMessage(seasonError);
+      return;
+    }
+
     setLoading(true);
     setMessage('');
 
@@ -131,8 +171,8 @@ export function AddFlyData() {
         .single();
 
       if (existingFly) {
-        // If fly exists, update it while preserving the image_url if no new one is provided
-        const { error: flyError } = await supabase
+        // Update existing fly
+        const { error: updateError } = await supabase
           .from('flies')
           .update({
             description: formData.description,
@@ -141,14 +181,18 @@ export function AddFlyData() {
             season: formData.season,
             water_type: formData.water_type,
             target_species: formData.target_species,
-            weather_conditions: formData.weather_conditions
+            weather_conditions: formData.weather_conditions,
+            season_start: formData.season_start,
+            season_end: formData.season_end,
+            temp_min: formData.temp_min,
+            temp_max: formData.temp_max
           })
           .eq('name', formData.name);
 
-        if (flyError) throw flyError;
+        if (updateError) throw updateError;
       } else {
-        // If fly doesn't exist, insert it
-        const { error: flyError } = await supabase
+        // Insert new fly
+        const { error: insertError } = await supabase
           .from('flies')
           .insert([{
             name: formData.name,
@@ -158,49 +202,16 @@ export function AddFlyData() {
             season: formData.season,
             water_type: formData.water_type,
             target_species: formData.target_species,
-            weather_conditions: formData.weather_conditions
+            weather_conditions: formData.weather_conditions,
+            season_start: formData.season_start,
+            season_end: formData.season_end,
+            temp_min: formData.temp_min,
+            temp_max: formData.temp_max
           }]);
 
-        if (flyError) throw flyError;
+        if (insertError) throw insertError;
       }
 
-      // Delete existing patterns for this fly
-      const { error: deleteError } = await supabase
-        .from('seasonal_fly_patterns')
-        .delete()
-        .eq('fly_name', formData.name);
-
-      if (deleteError) throw deleteError;
-
-      // Insert new patterns
-      const { error: patternError } = await supabase
-        .from('seasonal_fly_patterns')
-        .insert(formData.patterns.map(pattern => ({
-          fly_name: formData.name,
-          season_start: pattern.season_start,
-          season_end: pattern.season_end,
-          temp_min: pattern.temp_min,
-          temp_max: pattern.temp_max,
-          created_at: new Date().toISOString()
-        })));
-
-      if (patternError) throw patternError;
-
-      // Run the query to insert missing flies
-      const { error: missingFliesError } = await supabase
-        .rpc('insert_missing_flies', {}, {
-          head: false,
-          count: 'exact'
-        });
-
-      if (missingFliesError) {
-        console.error('Error inserting missing flies:', missingFliesError);
-        // Don't throw error here to avoid interrupting the main flow
-      }
-
-      // After successful save, refresh the incomplete flies list
-      await fetchIncompleteFlies();
-      
       setMessage('Fly data saved successfully!');
       setFormData(INITIAL_FORM_STATE);
     } catch (error: any) {
@@ -231,41 +242,31 @@ export function AddFlyData() {
     }
 
     setAiLoading(true);
-    setMessage('AI is analyzing the fly...');
-
     try {
       // Get description
       const descriptionPrompt = `What type of fly is the ${formData.name}? Please provide a brief description for fly fishing.`;
-      const description = await queryOpenAI(descriptionPrompt);
-
-      // Enhanced target species prompt
+      const descriptionResponse = await queryOpenAI(descriptionPrompt);
+      
+      // Get target species
       const speciesPrompt = `What species of fish does the ${formData.name} fly pattern typically target? Please list ONLY from these options, separated by commas: brown_trout, rainbow_trout, brook_trout, cutthroat_trout, salmon, steelhead, grayling. List ALL that apply.`;
       const speciesResponse = await queryOpenAI(speciesPrompt);
       const targetSpecies = speciesResponse
         .toLowerCase()
         .split(/[,.]/)
         .map(s => s.trim())
-        .filter(s => [
-          'brown_trout',
-          'rainbow_trout',
-          'brook_trout',
-          'cutthroat_trout',
-          'salmon',
-          'steelhead',
-          'grayling'
-        ].includes(s.replace(/\s+/g, '_')));
+        .filter(s => ['brown_trout', 'rainbow_trout', 'brook_trout', 'cutthroat_trout', 'salmon', 'steelhead', 'grayling'].includes(s));
 
       // Get seasons
       const seasonsPrompt = `What seasons is the ${formData.name} fly effective in? List ALL suitable seasons (spring, summer, fall, winter), separated by commas.`;
       const seasonsResponse = await queryOpenAI(seasonsPrompt);
-      const season = seasonsResponse
+      const seasons = seasonsResponse
         .toLowerCase()
         .split(/[,.]/)
         .map(s => s.trim())
         .filter(s => ['spring', 'summer', 'fall', 'winter'].includes(s));
 
-      // Get water types
-      const waterTypesPrompt = `What types of water is the ${formData.name} fly best used in? List ALL suitable water types (river, stream, lake, pond, saltwater), separated by commas.`;
+      // Get water types with more inclusive prompt
+      const waterTypesPrompt = `What types of water can the ${formData.name} fly be effectively used in? Consider that most flies can be adapted for different water types. List ALL potentially suitable water types (river, stream, lake, pond, saltwater), separated by commas.`;
       const waterTypesResponse = await queryOpenAI(waterTypesPrompt);
       const waterType = waterTypesResponse
         .toLowerCase()
@@ -280,15 +281,7 @@ export function AddFlyData() {
         .toLowerCase()
         .split(/[,.]/)
         .map(s => s.trim())
-        .filter(s => [
-          'dry_fly',
-          'wet_fly',
-          'nymph',
-          'streamer',
-          'emerger',
-          'terrestrial',
-          'buzzer'
-        ].includes(s.replace(/\s+/g, '_')));
+        .filter(s => ['dry_fly', 'wet_fly', 'nymph', 'streamer', 'emerger', 'terrestrial', 'buzzer'].includes(s.replace(/\s+/g, '_')));
 
       // Get weather conditions
       const weatherPrompt = `What weather conditions is the ${formData.name} fly best fished in? List ALL suitable conditions (sunny, cloudy, overcast, rain, storm), separated by commas.`;
@@ -299,67 +292,40 @@ export function AddFlyData() {
         .map(s => s.trim())
         .filter(s => ['sunny', 'cloudy', 'overcast', 'rain', 'storm'].includes(s));
 
-      // Updated seasonal patterns prompt
-      const patternsPrompt = `For the ${formData.name} fly, please provide optimal fishing seasons in the following format:
-        1. Season start month (1-12), Season end month (1-12), Minimum water temperature (°C), Maximum water temperature (°C)
-        Example: March(3) to May(5), 7°C to 18°C`;
-        
-      const patternsResponse = await queryOpenAI(patternsPrompt);
+      // Get seasonal pattern
+      const seasonalPrompt = `For the ${formData.name} fly, when is the prime fishing season? Respond in this exact format: "Start: [month number 1-12], End: [month number 1-12], Min Temp: [celsius], Max Temp: [celsius]"`;
+      const seasonalResponse = await queryOpenAI(seasonalPrompt);
       
-      // Parse the patterns response
-      const monthMap: { [key: string]: string } = {
-        'january': '01', 'february': '02', 'march': '03', 'april': '04',
-        'may': '05', 'june': '06', 'july': '07', 'august': '08',
-        'september': '09', 'october': '10', 'november': '11', 'december': '12'
-      };
+      // Parse seasonal response
+      const startMatch = seasonalResponse.match(/Start:\s*(\d{1,2})/);
+      const endMatch = seasonalResponse.match(/End:\s*(\d{1,2})/);
+      const minTempMatch = seasonalResponse.match(/Min Temp:\s*(-?\d+)/);
+      const maxTempMatch = seasonalResponse.match(/Max Temp:\s*(-?\d+)/);
 
-      const patterns: Pattern[] = [];
-      
-      try {
-        const text = patternsResponse.toLowerCase();
-        
-        // Extract months
-        const startMonth = Object.entries(monthMap).find(([month]) => text.includes(month))?.[1] || '03';
-        const endMonth = Object.entries(monthMap)
-          .filter(([month]) => text.includes(month))
-          .slice(-1)[0]?.[1] || '05';
-        
-        // Extract temperatures (now looking for Celsius)
-        const temps = text.match(/\d+°?c/g)?.map(t => parseInt(t)) || [7, 18];
-        
-        patterns.push({
-          season_start: startMonth,
-          season_end: endMonth,
-          temp_min: Math.min(...temps),
-          temp_max: Math.max(...temps)
-        });
-      } catch (error) {
-        console.error('Error parsing patterns:', error);
-        patterns.push(INITIAL_PATTERN);
-      }
-
-      // Update form data
       setFormData(prev => ({
         ...prev,
-        description,
+        description: descriptionResponse,
         target_species: targetSpecies,
-        season,
+        season: seasons,
         water_type: waterType,
-        categories,
+        categories: categories,
         weather_conditions: weatherConditions,
-        patterns: patterns
+        season_start: startMatch ? startMatch[1].padStart(2, '0') : '03',
+        season_end: endMatch ? endMatch[1].padStart(2, '0') : '05',
+        temp_min: minTempMatch ? parseInt(minTempMatch[1]) : 7,
+        temp_max: maxTempMatch ? parseInt(maxTempMatch[1]) : 18
       }));
 
-      setMessage('AI analysis complete! Please review and adjust the suggestions as needed.');
+      setMessage('AI content generated successfully!');
     } catch (error: any) {
-      setMessage(`AI Error: ${error.message}`);
+      setMessage(`Error generating content: ${error.message}`);
     } finally {
       setAiLoading(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto px-4 py-8">
       {/* Incomplete Flies Dropdown */}
       {incompleteFlies.length > 0 && (
         <div className="mb-8 p-4 bg-blue-900/50 rounded-lg">
@@ -533,104 +499,81 @@ export function AddFlyData() {
           </div>
         </section>
 
-        {/* Seasonal Patterns */}
-        <section className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Seasonal Patterns</h2>
-          
-          {formData.patterns.map((pattern, index) => (
-            <div key={index} className="grid grid-cols-2 gap-4 mb-4 p-4 border rounded">
-              <div>
-                <label className="block text-sm font-medium mb-1">Season Start Month</label>
-                <select
-                  className="w-full p-2 border rounded"
-                  value={pattern.season_start}
-                  onChange={(e) => {
-                    const newPatterns = [...formData.patterns];
-                    newPatterns[index].season_start = e.target.value;
-                    setFormData({ ...formData, patterns: newPatterns });
-                  }}
-                >
-                  <option value="01">January</option>
-                  <option value="02">February</option>
-                  <option value="03">March</option>
-                  <option value="04">April</option>
-                  <option value="05">May</option>
-                  <option value="06">June</option>
-                  <option value="07">July</option>
-                  <option value="08">August</option>
-                  <option value="09">September</option>
-                  <option value="10">October</option>
-                  <option value="11">November</option>
-                  <option value="12">December</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Season End Month</label>
-                <select
-                  className="w-full p-2 border rounded"
-                  value={pattern.season_end}
-                  onChange={(e) => {
-                    const newPatterns = [...formData.patterns];
-                    newPatterns[index].season_end = e.target.value;
-                    setFormData({ ...formData, patterns: newPatterns });
-                  }}
-                >
-                  <option value="01">January</option>
-                  <option value="02">February</option>
-                  <option value="03">March</option>
-                  <option value="04">April</option>
-                  <option value="05">May</option>
-                  <option value="06">June</option>
-                  <option value="07">July</option>
-                  <option value="08">August</option>
-                  <option value="09">September</option>
-                  <option value="10">October</option>
-                  <option value="11">November</option>
-                  <option value="12">December</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Min Temperature (°C)</label>
-                <input
-                  type="number"
-                  className="w-full p-2 border rounded"
-                  value={pattern.temp_min}
-                  onChange={(e) => {
-                    const newPatterns = [...formData.patterns];
-                    newPatterns[index].temp_min = parseInt(e.target.value);
-                    setFormData({ ...formData, patterns: newPatterns });
-                  }}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Max Temperature (°C)</label>
-                <input
-                  type="number"
-                  className="w-full p-2 border rounded"
-                  value={pattern.temp_max}
-                  onChange={(e) => {
-                    const newPatterns = [...formData.patterns];
-                    newPatterns[index].temp_max = parseInt(e.target.value);
-                    setFormData({ ...formData, patterns: newPatterns });
-                  }}
-                />
-              </div>
+        {/* Seasonal Pattern */}
+        <section className="bg-white p-6 rounded-lg shadow mt-6">
+          <h2 className="text-xl font-semibold mb-4">Seasonal Pattern</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Season Start Month</label>
+              <select
+                className="w-full p-2 border rounded"
+                value={formData.season_start}
+                onChange={(e) => setFormData({ ...formData, season_start: e.target.value })}
+              >
+                <option value="01">January</option>
+                <option value="02">February</option>
+                <option value="03">March</option>
+                <option value="04">April</option>
+                <option value="05">May</option>
+                <option value="06">June</option>
+                <option value="07">July</option>
+                <option value="08">August</option>
+                <option value="09">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
             </div>
-          ))}
 
-          <button 
-            type="button"
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            onClick={() => setFormData({
-              ...formData,
-              patterns: [...formData.patterns, { ...INITIAL_PATTERN }]
-            })}
-          >
-            Add Another Pattern
-          </button>
+            <div>
+              <label className="block text-sm font-medium mb-1">Season End Month</label>
+              <select
+                className="w-full p-2 border rounded"
+                value={formData.season_end}
+                onChange={(e) => setFormData({ ...formData, season_end: e.target.value })}
+              >
+                <option value="01">January</option>
+                <option value="02">February</option>
+                <option value="03">March</option>
+                <option value="04">April</option>
+                <option value="05">May</option>
+                <option value="06">June</option>
+                <option value="07">July</option>
+                <option value="08">August</option>
+                <option value="09">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Min Temperature (°C)</label>
+              <input
+                type="number"
+                className="w-full p-2 border rounded"
+                value={formData.temp_min}
+                onChange={(e) => setFormData({ ...formData, temp_min: parseInt(e.target.value) })}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Max Temperature (°C)</label>
+              <input
+                type="number"
+                className="w-full p-2 border rounded"
+                value={formData.temp_max}
+                onChange={(e) => setFormData({ ...formData, temp_max: parseInt(e.target.value) })}
+              />
+            </div>
+          </div>
+          
+          <SeasonalEffectivenessPreview
+            seasonStart={formData.season_start}
+            seasonEnd={formData.season_end}
+            tempMin={formData.temp_min}
+            tempMax={formData.temp_max}
+          />
         </section>
 
         <button
@@ -642,6 +585,53 @@ export function AddFlyData() {
           Save Fly Data
         </button>
       </form>
+    </div>
+  );
+}
+
+function SeasonalEffectivenessPreview({ 
+  seasonStart, 
+  seasonEnd, 
+  tempMin, 
+  tempMax 
+}: { 
+  seasonStart: string, 
+  seasonEnd: string, 
+  tempMin: number, 
+  tempMax: number 
+}) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+
+  const startMonth = parseInt(seasonStart) - 1;
+  const endMonth = parseInt(seasonEnd) - 1;
+
+  return (
+    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+      <h3 className="text-sm font-medium mb-2">Seasonal Effectiveness</h3>
+      <div className="grid grid-cols-12 gap-1">
+        {months.map((month, i) => {
+          const isActive = (startMonth <= endMonth)
+            ? (i >= startMonth && i <= endMonth)
+            : (i >= startMonth || i <= endMonth);
+          
+          return (
+            <div
+              key={month}
+              className={`text-center p-1 text-xs rounded ${
+                isActive ? 'bg-green-500 text-white' : 'bg-gray-200'
+              }`}
+            >
+              {month}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 text-sm text-gray-600">
+        Optimal water temperature: {tempMin}°C to {tempMax}°C
+      </div>
     </div>
   );
 } 

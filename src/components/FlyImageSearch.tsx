@@ -98,22 +98,28 @@ export function FlyImageSearch() {
 
       const blob = await response.blob();
       
-      // Upload to Supabase
+      // Upload to Supabase with correct content type
       const fileExt = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
       const fileName = `${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
         .from('fly-images')
-        .upload(fileName, blob);
+        .upload(fileName, blob, {
+          contentType: blob.type,
+          cacheControl: '3600',
+          upsert: false
+        });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
+      // Get public URL using the correct format
+      const { data: urlData } = supabase.storage
         .from('fly-images')
         .getPublicUrl(fileName);
 
-      // Update fly record
+      const publicUrl = urlData.publicUrl;
+
+      // Update fly record with just the image URL
       const { error: updateError } = await supabase
         .from('flies')
         .update({ image_url: publicUrl })
@@ -126,6 +132,7 @@ export function FlyImageSearch() {
       setSelectedFly(null);
       fetchFlies(); // Refresh the flies list
     } catch (err: any) {
+      console.error('Upload error:', err);
       setMessage(`Error: ${err.message}`);
     } finally {
       setLoading(false);

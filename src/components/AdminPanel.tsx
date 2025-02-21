@@ -3,14 +3,15 @@ import { supabase } from '../lib/supabase';
 import { Upload } from 'lucide-react';
 import { FlyImageSearch } from './FlyImageSearch';
 import { AddFlyData } from './AddFlyData';
+import { BulkFlyImport } from './BulkFlyImport';
 
 export function AdminPanel() {
-  const [activeTab, setActiveTab] = useState('flies'); // 'flies' or 'add'
+  const [activeTab, setActiveTab] = useState<'flies' | 'add' | 'bulk'>('flies'); // 'flies' or 'add' or 'bulk'
   const [flyName, setFlyName] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -33,21 +34,79 @@ export function AdminPanel() {
     setMessage('');
 
     try {
-      // 1. Upload image to Supabase Storage
-      const fileExt = file.name.split('.').pop();
+      // Log file details
+      console.log('File to upload:', {
+        name: file.name,
+        type: file.type,
+        size: file.size
+      });
+
+      // 1. Validate file type and size
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Please select an image file');
+      }
+
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        throw new Error('File size must be less than 5MB');
+      }
+
+      // 2. Create clean filename
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
       const fileName = `${Date.now()}.${fileExt}`;
+      console.log('Generated filename:', fileName);
+
+      // 3. Upload to Supabase with detailed error handling
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('fly-images')
-        .upload(fileName, file);
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type
+        });
 
-      if (uploadError) throw uploadError;
+      // Log upload attempt
+      console.log('Upload attempt:', {
+        success: !uploadError,
+        error: uploadError,
+        data: uploadData
+      });
 
-      // 2. Get the public URL for the uploaded image
+      if (uploadError) {
+        console.error('Upload error details:', {
+          message: uploadError.message,
+          statusCode: uploadError.statusCode,
+          name: uploadError.name,
+          error: uploadError
+        });
+        throw uploadError;
+      }
+
+      // 4. Verify file was uploaded
+      const { data: checkData, error: checkError } = await supabase.storage
+        .from('fly-images')
+        .list('', {
+          limit: 1,
+          offset: 0,
+          search: fileName
+        });
+
+      console.log('Storage check:', {
+        fileFound: checkData?.length > 0,
+        error: checkError
+      });
+
+      if (checkError || !checkData?.length) {
+        throw new Error('Failed to verify file upload');
+      }
+
+      // 5. Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('fly-images')
         .getPublicUrl(fileName);
 
-      // 3. Check if a fly with this name exists
+      console.log('Generated public URL:', publicUrl);
+
+      // 6. Save to database
       const { data: existingFly } = await supabase
         .from('flies')
         .select('*')
@@ -55,7 +114,6 @@ export function AdminPanel() {
         .single();
 
       if (existingFly) {
-        // Update the existing fly's image URL
         const { error: updateError } = await supabase
           .from('flies')
           .update({ image_url: publicUrl })
@@ -64,28 +122,28 @@ export function AdminPanel() {
         if (updateError) throw updateError;
         setMessage('Fly image updated successfully!');
       } else {
-        // Insert new fly
         const { error: insertError } = await supabase
           .from('flies')
-          .insert([
-            {
-              name: flyName,
-              image_url: publicUrl,
-              created_at: new Date().toISOString(),
-            },
-          ]);
+          .insert([{
+            name: flyName,
+            image_url: publicUrl,
+            created_at: new Date().toISOString()
+          }]);
 
         if (insertError) throw insertError;
         setMessage('New fly added successfully!');
       }
 
+      // Reset form
       setFlyName('');
       setFile(null);
       setPreviewUrl(null);
       if (e.target instanceof HTMLFormElement) {
         e.target.reset();
       }
+
     } catch (err: any) {
+      console.error('Full error object:', err);
       setMessage(`Error: ${err.message}`);
     } finally {
       setLoading(false);
@@ -95,6 +153,22 @@ export function AdminPanel() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.reload();
+  };
+
+  // Update the image display component to handle the correct URL format
+  const ImageDisplay = ({ url, alt }: { url: string; alt: string }) => {
+    return (
+      <img
+        src={url}
+        alt={alt}
+        className="w-16 h-16 object-cover rounded"
+        loading="lazy"
+        onError={(e) => {
+          console.error('Image load error:', url);
+          e.currentTarget.src = '/placeholder-fly.png'; // Add a placeholder image
+        }}
+      />
+    );
   };
 
   return (
@@ -122,6 +196,16 @@ export function AdminPanel() {
             >
               Add New Fly
             </button>
+            <button
+              onClick={() => setActiveTab('bulk')}
+              className={`px-4 py-2 rounded ${
+                activeTab === 'bulk' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              Bulk Import
+            </button>
           </div>
           <button onClick={handleLogout} className="text-blue-600 hover:text-blue-800">
             Logout
@@ -131,8 +215,56 @@ export function AdminPanel() {
         <div className="p-4">
           {activeTab === 'flies' ? (
             <FlyImageSearch />
+          ) : activeTab === 'add' ? (
+            <div>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Fly Name</label>
+                  <input
+                    type="text"
+                    value={flyName}
+                    onChange={(e) => setFlyName(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Image</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="w-full p-2 border rounded"
+                    required
+                  />
+                </div>
+
+                {previewUrl && (
+                  <div className="mt-2">
+                    <ImageDisplay url={previewUrl} alt="Preview" />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {loading ? 'Saving...' : 'Save Fly'}
+                </button>
+
+                {message && (
+                  <div className={`p-2 rounded ${
+                    message.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                  }`}>
+                    {message}
+                  </div>
+                )}
+              </form>
+            </div>
           ) : (
-            <AddFlyData />
+            <BulkFlyImport />
           )}
         </div>
       </div>
