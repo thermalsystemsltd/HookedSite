@@ -24,6 +24,9 @@ export function ManageFlyDetails() {
   const [message, setMessage] = useState('');
   const [currentFly, setCurrentFly] = useState<Fly | null>(null);
   const [editingDetails, setEditingDetails] = useState<Partial<Fly>>();
+  const [batchProcessing, setBatchProcessing] = useState(false);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
     fetchIncompleteFlies();
@@ -129,8 +132,131 @@ Fishing Depth: [specify one of these options:
     }
   };
 
+  const processAllFlies = async () => {
+    try {
+      setBatchProcessing(true);
+      setMessage('Starting batch processing...');
+
+      // Get all flies
+      const { data: allFlies, error: fetchError } = await supabase
+        .from('flies')
+        .select('*')
+        .order('name');
+
+      if (fetchError) throw fetchError;
+      if (!allFlies) throw new Error('No flies found');
+
+      setTotalCount(allFlies.length);
+      setProcessedCount(0);
+
+      // Process flies in batches of 3 to avoid rate limits
+      for (let i = 0; i < allFlies.length; i += 3) {
+        const batch = allFlies.slice(i, i + 3);
+        await Promise.all(batch.map(async (fly) => {
+          try {
+            // Get AI details
+            const descriptionPrompt = `Given the following fly fishing pattern: "${fly.name}", provide a detailed description of the fly pattern, its history, and how it's typically tied (2-3 sentences).`;
+            const description = await queryOpenAI(descriptionPrompt);
+
+            const detailsPrompt = `Using this description of the ${fly.name}:
+"${description}"
+
+Provide specific details in this exact format:
+Categories: [list all applicable fly types from these options: Dry Fly, Wet Fly, Nymph, Streamer, Buzzer, Emerger, Salmon Fly, Terrestrial]
+Season: [list specific seasons when this fly is most effective]
+Water Types: [list specific water bodies and conditions where this fly works best]
+Weather Conditions: [list specific weather conditions ideal for this fly]
+Target Species: [list specific fish species this fly is designed to catch]
+Temperature Range: [specific min-max in Celsius when this fly is most effective]
+Fishing Depth: [specify one of these options:
+- Surface (for dry flies and terrestrials)
+- Film (for emergers and spent flies)
+- Subsurface (for wet flies and shallow nymphs)
+- Mid-Column (for nymphs and streamers)
+- Deep (for heavy nymphs and deep streamers)]`;
+
+            const detailsResponse = await queryOpenAI(detailsPrompt);
+
+            // Parse responses
+            const categories = detailsResponse.match(/Categories: (.*?)(?:\n|$)/)?.[1].match(/["'][^"']+["']|\S+/g) || [];
+            const season = detailsResponse.match(/Season: (.*?)(?:\n|$)/)?.[1].match(/["'][^"']+["']|\S+/g) || [];
+            const waterType = detailsResponse.match(/Water Types: (.*?)(?:\n|$)/)?.[1].match(/["'][^"']+["']|\S+/g) || [];
+            const weatherConditions = detailsResponse.match(/Weather Conditions: (.*?)(?:\n|$)/)?.[1].match(/["'][^"']+["']|\S+/g) || [];
+            const targetSpecies = detailsResponse.match(/Target Species: (.*?)(?:\n|$)/)?.[1].match(/["'][^"']+["']|\S+/g) || [];
+            const tempRange = detailsResponse.match(/Temperature Range: (.*?)(?:\n|$)/)?.[1].split('-').map(t => parseFloat(t.trim()));
+            const depth = detailsResponse.match(/Fishing Depth: (.*?)(?:\n|$)/)?.[1].trim();
+
+            // Update the fly in the database
+            const { error: updateError } = await supabase
+              .from('flies')
+              .update({
+                description: description,
+                categories: categories.map(c => c.replace(/["']/g, '')),
+                season: season.map(s => s.replace(/["']/g, '')),
+                water_type: waterType.map(w => w.replace(/["']/g, '')),
+                weather_conditions: weatherConditions.map(w => w.replace(/["']/g, '')),
+                target_species: targetSpecies.map(t => t.replace(/["']/g, '')),
+                temp_min: tempRange[0] || 0,
+                temp_max: tempRange[1] || 30,
+                depth: depth,
+                season_start: '03',
+                season_end: '09'
+              })
+              .eq('id', fly.id);
+
+            if (updateError) throw updateError;
+            setProcessedCount(prev => prev + 1);
+          } catch (err: any) {
+            console.error(`Error processing fly ${fly.name}:`, err);
+            setMessage(`Error processing ${fly.name}: ${err.message}`);
+          }
+        }));
+
+        // Add a delay between batches to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      setMessage('Batch processing completed successfully!');
+    } catch (err: any) {
+      setMessage(`Batch processing error: ${err.message}`);
+    } finally {
+      setBatchProcessing(false);
+      fetchIncompleteFlies();
+    }
+  };
+
+  const renderBatchProcessing = () => (
+    <div className="mb-6">
+      <button
+        onClick={processAllFlies}
+        disabled={batchProcessing}
+        className={`px-4 py-2 rounded ${
+          batchProcessing 
+            ? 'bg-gray-400 cursor-not-allowed' 
+            : 'bg-green-600 hover:bg-green-700 text-white'
+        }`}
+      >
+        {batchProcessing ? 'Processing...' : 'Process All Flies'}
+      </button>
+      {batchProcessing && (
+        <div className="mt-2">
+          <div className="text-sm text-gray-600">
+            Processing flies: {processedCount} / {totalCount}
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+            <div 
+              className="bg-green-600 h-2.5 rounded-full" 
+              style={{ width: `${(processedCount / totalCount) * 100}%` }}
+            ></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
+      {renderBatchProcessing()}
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">Manage Fly Details</h2>
         <div className="text-sm text-gray-600">
