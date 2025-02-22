@@ -5,10 +5,20 @@ import { Search, Loader } from 'lucide-react';
 const GOOGLE_API_KEY = 'AIzaSyAS_3fMmARCHNMRZHf7wAPbs-ChUGqxEQ4';
 const SEARCH_ENGINE_ID = 'c15b9822121d049d7';
 
+interface FlyDetails {
+  type: string;
+  weather_conditions: string;
+  time_of_day: string;
+  seasonal_timing: string;
+  depth_preference: string;
+  target_species: string;
+}
+
 interface Fly {
   id: number;
   name: string;
   image_url: string | null;
+  details?: FlyDetails;  // Making this optional since existing records won't have it
 }
 
 interface SearchResult {
@@ -25,6 +35,8 @@ export function FlyImageSearch() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedFly, setSelectedFly] = useState<Fly | null>(null);
+  const [editingDetails, setEditingDetails] = useState<FlyDetails | null>(null);
+  const [processingAI, setProcessingAI] = useState(false);
 
   useEffect(() => {
     fetchFlies();
@@ -78,6 +90,69 @@ export function FlyImageSearch() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFlyDetails = async (flyName: string) => {
+    setProcessingAI(true);
+    try {
+      const prompt = `Given the following fly fishing pattern: "${flyName}", provide details:
+- Type (Dry Fly, Nymph, Lure, Buzzer, etc.)
+- Best weather conditions (Temperature range, wind conditions, cloud cover)
+- Best time of day (Morning, Midday, Evening, Night)
+- Seasonal hatch timing (Spring, Summer, Fall, Winter)
+- Depth preference (Topwater, Midwater, Bottom)
+- Target fish species (Rainbow Trout, Brown Trout, etc.)`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer sk-svcacct-Q3rlO6vQmbmvqWnZXKWcuhF-LPeByKPRWsqp8WUjJlbGbhSxBjpDf7o0vuC6uiST3BlbkFJyCq92Oo8xzqMVKJUkFwneACi4qo5YrlS72jvA0c6tfMm-YqND6OYl0_d6y3tfgwA'
+        },
+        body: JSON.stringify({
+          model: "gpt-4",
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.7
+        })
+      });
+
+      const data = await response.json();
+      const aiResponse = data.choices[0].message.content;
+      
+      // Parse AI response into structured data
+      const details: FlyDetails = {
+        type: aiResponse.match(/Type.*?: (.*?)(?:\n|$)/)?.[1] || '',
+        weather_conditions: aiResponse.match(/weather conditions.*?: (.*?)(?:\n|$)/)?.[1] || '',
+        time_of_day: aiResponse.match(/time of day.*?: (.*?)(?:\n|$)/)?.[1] || '',
+        seasonal_timing: aiResponse.match(/Seasonal.*?: (.*?)(?:\n|$)/)?.[1] || '',
+        depth_preference: aiResponse.match(/Depth.*?: (.*?)(?:\n|$)/)?.[1] || '',
+        target_species: aiResponse.match(/Target.*?: (.*?)(?:\n|$)/)?.[1] || ''
+      };
+
+      return details;
+    } catch (error) {
+      console.error('Error fetching AI details:', error);
+      throw error;
+    } finally {
+      setProcessingAI(false);
+    }
+  };
+
+  const saveFlyDetails = async (flyId: number, details: FlyDetails) => {
+    try {
+      const { error } = await supabase
+        .from('flies')
+        .update({ details })
+        .eq('id', flyId);
+
+      if (error) throw error;
+      
+      setMessage('Fly details saved successfully!');
+      setEditingDetails(null);
+      fetchFlies();
+    } catch (err: any) {
+      setMessage(`Error saving details: ${err.message}`);
     }
   };
 
@@ -139,6 +214,55 @@ export function FlyImageSearch() {
     }
   };
 
+  const handleFlyClick = async (fly: Fly) => {
+    setSelectedFly(fly);
+    if (!fly.details) {
+      try {
+        const details = await fetchFlyDetails(fly.name);
+        setEditingDetails(details);
+      } catch (err: any) {
+        setMessage(`Error getting AI details: ${err.message}`);
+      }
+    } else {
+      setEditingDetails(fly.details);
+    }
+  };
+
+  const renderFlyDetailsForm = () => {
+    if (!selectedFly || !editingDetails) return null;
+
+    return (
+      <div className="mt-6 p-4 border rounded-lg">
+        <h3 className="text-xl font-semibold mb-4">Edit Fly Details: {selectedFly.name}</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Type</label>
+            <input
+              type="text"
+              value={editingDetails.type}
+              onChange={(e) => setEditingDetails({...editingDetails, type: e.target.value})}
+              className="w-full p-2 border rounded"
+            />
+          </div>
+          <div className="flex gap-4">
+            <button
+              onClick={() => saveFlyDetails(selectedFly.id, editingDetails)}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              Save Details
+            </button>
+            <button
+              onClick={() => setEditingDetails(null)}
+              className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="p-6 bg-white rounded-lg">
       <h2 className="text-2xl font-bold mb-6">Update Fly Images</h2>
@@ -157,7 +281,7 @@ export function FlyImageSearch() {
             className={`p-4 border rounded-lg cursor-pointer transition-colors ${
               selectedFly?.id === fly.id ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-400'
             }`}
-            onClick={() => searchImagesForFly(fly)}
+            onClick={() => handleFlyClick(fly)}
           >
             <div className="flex items-center gap-4">
               {fly.image_url && (
@@ -210,6 +334,7 @@ export function FlyImageSearch() {
               ))}
             </div>
           )}
+          {renderFlyDetailsForm()}
         </div>
       )}
     </div>

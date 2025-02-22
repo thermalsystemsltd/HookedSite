@@ -4,9 +4,10 @@ import { Upload } from 'lucide-react';
 import { FlyImageSearch } from './FlyImageSearch';
 import { AddFlyData } from './AddFlyData';
 import { BulkFlyImport } from './BulkFlyImport';
+import { ManageFlyDetails } from './ManageFlyDetails';
 
 export function AdminPanel() {
-  const [activeTab, setActiveTab] = useState<'flies' | 'add' | 'bulk'>('flies'); // 'flies' or 'add' or 'bulk'
+  const [activeTab, setActiveTab] = useState<'flies' | 'add' | 'bulk' | 'details'>('flies'); // 'flies' or 'add' or 'bulk' or 'details'
   const [flyName, setFlyName] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -206,6 +207,16 @@ export function AdminPanel() {
             >
               Bulk Import
             </button>
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`px-4 py-2 rounded ${
+                activeTab === 'details' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              Manage Fly Details
+            </button>
           </div>
           <button onClick={handleLogout} className="text-blue-600 hover:text-blue-800">
             Logout
@@ -216,55 +227,11 @@ export function AdminPanel() {
           {activeTab === 'flies' ? (
             <FlyImageSearch />
           ) : activeTab === 'add' ? (
-            <div>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Fly Name</label>
-                  <input
-                    type="text"
-                    value={flyName}
-                    onChange={(e) => setFlyName(e.target.value)}
-                    className="w-full p-2 border rounded"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Image</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="w-full p-2 border rounded"
-                    required
-                  />
-                </div>
-
-                {previewUrl && (
-                  <div className="mt-2">
-                    <ImageDisplay url={previewUrl} alt="Preview" />
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {loading ? 'Saving...' : 'Save Fly'}
-                </button>
-
-                {message && (
-                  <div className={`p-2 rounded ${
-                    message.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                  }`}>
-                    {message}
-                  </div>
-                )}
-              </form>
-            </div>
-          ) : (
+            <AddFlyData />
+          ) : activeTab === 'bulk' ? (
             <BulkFlyImport />
+          ) : (
+            <ManageFlyDetails />
           )}
         </div>
       </div>
