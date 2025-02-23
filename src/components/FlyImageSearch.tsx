@@ -164,6 +164,10 @@ export function FlyImageSearch() {
 
   const handleFlyClick = async (fly: Fly) => {
     setSelectedFly(fly);
+    // Immediately search for images when a fly is clicked
+    await searchImagesForFly(fly);
+    
+    // Keep the existing details logic if you need it
     if (!fly.details) {
       try {
         const details = await fetchFlyDetails(fly.name);
