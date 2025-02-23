@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Search, Loader } from 'lucide-react';
 
-const GOOGLE_API_KEY = 'AIzaSyAS_3fMmARCHNMRZHf7wAPbs-ChUGqxEQ4';
-const SEARCH_ENGINE_ID = 'c15b9822121d049d7';
+const GOOGLE_API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
+const SEARCH_ENGINE_ID = import.meta.env.VITE_SEARCH_ENGINE_ID;
 
 interface FlyDetails {
   type: string;
@@ -67,14 +67,12 @@ export function FlyImageSearch() {
         `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${SEARCH_ENGINE_ID}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=5`
       );
       
-      const data = await response.json();
-      
-      // Check for quota exceeded error
-      if (data.error?.code === 429 || data.error?.message?.includes('quota')) {
-        setMessage('Daily search quota exceeded. Please try again tomorrow.');
-        setSearchResults([]);
-        return;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Failed to fetch images');
       }
+      
+      const data = await response.json();
       
       if (data.items) {
         setSearchResults(data.items);
@@ -82,60 +80,10 @@ export function FlyImageSearch() {
         setMessage('No images found');
       }
     } catch (err: any) {
-      // Check for specific quota error messages
-      if (err.message?.includes('quota') || err.message?.includes('429')) {
-        setMessage('Daily search quota exceeded. Please try again tomorrow.');
-      } else {
-        setMessage(`Error: ${err.message}`);
-      }
+      console.error('Search error:', err);
+      setMessage(`Error: ${err.message}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchFlyDetails = async (flyName: string) => {
-    setProcessingAI(true);
-    try {
-      const prompt = `Given the following fly fishing pattern: "${flyName}", provide details:
-- Type (Dry Fly, Nymph, Lure, Buzzer, etc.)
-- Best weather conditions (Temperature range, wind conditions, cloud cover)
-- Best time of day (Morning, Midday, Evening, Night)
-- Seasonal hatch timing (Spring, Summer, Fall, Winter)
-- Depth preference (Topwater, Midwater, Bottom)
-- Target fish species (Rainbow Trout, Brown Trout, etc.)`;
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer sk-svcacct-Q3rlO6vQmbmvqWnZXKWcuhF-LPeByKPRWsqp8WUjJlbGbhSxBjpDf7o0vuC6uiST3BlbkFJyCq92Oo8xzqMVKJUkFwneACi4qo5YrlS72jvA0c6tfMm-YqND6OYl0_d6y3tfgwA'
-        },
-        body: JSON.stringify({
-          model: "gpt-4",
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.7
-        })
-      });
-
-      const data = await response.json();
-      const aiResponse = data.choices[0].message.content;
-      
-      // Parse AI response into structured data
-      const details: FlyDetails = {
-        type: aiResponse.match(/Type.*?: (.*?)(?:\n|$)/)?.[1] || '',
-        weather_conditions: aiResponse.match(/weather conditions.*?: (.*?)(?:\n|$)/)?.[1] || '',
-        time_of_day: aiResponse.match(/time of day.*?: (.*?)(?:\n|$)/)?.[1] || '',
-        seasonal_timing: aiResponse.match(/Seasonal.*?: (.*?)(?:\n|$)/)?.[1] || '',
-        depth_preference: aiResponse.match(/Depth.*?: (.*?)(?:\n|$)/)?.[1] || '',
-        target_species: aiResponse.match(/Target.*?: (.*?)(?:\n|$)/)?.[1] || ''
-      };
-
-      return details;
-    } catch (error) {
-      console.error('Error fetching AI details:', error);
-      throw error;
-    } finally {
-      setProcessingAI(false);
     }
   };
 
